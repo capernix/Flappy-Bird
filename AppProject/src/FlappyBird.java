@@ -5,122 +5,74 @@ import java.util.Random;
 import javax.swing.*;
 
 
-public class FlappyBird extends JPanel implements ActionListener, KeyListener {
-    int boardWidth=360;
-    int boardHeight=640;
-
-    //We defined Image variables here.
-    Image backgroundImg;
-    Image topPipeImg;
-    Image birdImg;
-    Image bottomPipeImg;
-
-    //Bird Dimensions
-    int birdX= boardWidth/8;
-    int birdY= boardHeight/2;
-    int birdWidth= 34;
-    int birdHeight = 24;
-
-    //Defining a Bird class to make things easier
-    class Bird {
-        int x = birdX;
-        int y = birdY;
-        int width = birdWidth;
-        int height = birdHeight;
-        Image img;
-
-        Bird(Image img) {
-            this.img = img;
-        }
-    }
-
-    //Pipes
-
-    int pipeX = boardWidth;
-    int pipeY = 0;
-    int pipeWidth = 64; // Scaled the dimensions by 1/6
-    int pipeHeight = 512;
-
-    class Pipe {
-        int x = pipeX;
-        int y = pipeY;
-        int width = pipeWidth;
-        int height = pipeHeight;
-        Image img;
-        boolean passed = false;
-
-        Pipe(Image img) {
-            this.img = img;
-        }
-    }
-
-
-    //This is the game logic.
-    Bird bird;
-    int velocityX = -4; //This moves the pipe to the left (So makes it look like the bird is moving right)
-    int velocityY= 0;
-    int gravity= 1;
-
-    ArrayList<Pipe> pipes;
-    Random random = new Random();
-
-    Timer gameLoop;
-    Timer placePipesTimer;
-
-    boolean gameOver = false;
-    double score = 0;
-
+public class FlappyBird extends JPanel implements ActionListener {
+    // Game components
+    private Bird bird;
+    private ArrayList<Pipe> pipes;
+    private GameStateManager gameStateManager;
+    private InputManager inputManager;
+    
+    // Images
+    private Image backgroundImg;
+    private Image topPipeImg;
+    private Image birdImg;
+    private Image bottomPipeImg;
+    
+    // Timers
+    private Timer gameLoop;
+    private Timer placePipesTimer;
+    
     FlappyBird() {
-        setPreferredSize(new Dimension(boardWidth, boardHeight));
-        //setBackground(Color.blue);
-        //This makes sure that the FlappyBird class(That the JPanel is) is the one that takes the key events
+        setPreferredSize(new Dimension(GameConfig.BOARD_WIDTH, GameConfig.BOARD_HEIGHT));
         setFocusable(true);
-        //checks the 3 key functions
-        addKeyListener(this);
-
-        //We load the images
+        
+        // Initialize game components
+        gameStateManager = new GameStateManager();
+        inputManager = new InputManager();
+        
+        // Add input listeners
+        addKeyListener(inputManager);
+        addMouseListener(inputManager);
+        
+        // Load images
         backgroundImg = new ImageIcon(getClass().getResource("./flappybirdbg.png")).getImage();
         birdImg = new ImageIcon(getClass().getResource("./flappybird.png")).getImage();
         topPipeImg = new ImageIcon(getClass().getResource("./toppipe.png")).getImage();
         bottomPipeImg = new ImageIcon(getClass().getResource("./bottompipe.png")).getImage();
 
-        //Bird Image
-        bird = new Bird(birdImg);
+        // Initialize bird
+        bird = new Bird(birdImg, GameConfig.BIRD_X, GameConfig.BIRD_Y, 
+                       GameConfig.BIRD_WIDTH, GameConfig.BIRD_HEIGHT);
         pipes = new ArrayList<Pipe>();
 
         // Pipe placing timer
-        placePipesTimer = new Timer(1500, new ActionListener() {
+        placePipesTimer = new Timer(GameConfig.PIPE_SPAWN_INTERVAL, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 placePipes();
             }
         });
-        placePipesTimer.start();
-
-        //This is the game timer
-        gameLoop = new Timer(1000/60, this);
+        
+        // Game loop timer
+        gameLoop = new Timer(GameConfig.GAME_LOOP_DELAY, this);
+                
+        // Start the game loop immediately (needed for input handling)
         gameLoop.start();
-
     }
 
     public void placePipes() {
-
-        /*Since pipeHeight= 512 px,
-        And Math.Random generates a number between 0-1, so
-        (pipeHeight/2)*Math.Random generates a number between 0-256*/
-
-        int randomPipeY = (int)(pipeY - pipeHeight/4 - Math.random()*(pipeHeight/2));
-        int openingSpace = boardHeight/4;
-        Pipe topPipe = new Pipe(topPipeImg);
-        topPipe.y = randomPipeY;
+        // Calculate random pipe position
+        int randomPipeY = (int)(0 - GameConfig.PIPE_HEIGHT/4 - Math.random()*(GameConfig.PIPE_HEIGHT/2));
+        
+        // Create top pipe
+        Pipe topPipe = new Pipe(topPipeImg, GameConfig.BOARD_WIDTH, randomPipeY, 
+                               GameConfig.PIPE_WIDTH, GameConfig.PIPE_HEIGHT, true);
         pipes.add(topPipe);
 
-        Pipe bottomPipe = new Pipe(bottomPipeImg);
-        /* topPipe.y starts at the top of the topPipe as co ords start from top left corner
-        So when we add pipeHeight we get to the bottom of the topPipe
-        we add openingSpace and voila we get top of bottomPipe :)
-         */
-        bottomPipe.y = topPipe.y + pipeHeight + openingSpace;
+        // Create bottom pipe
+        Pipe bottomPipe = new Pipe(bottomPipeImg, GameConfig.BOARD_WIDTH, 
+                                  randomPipeY + GameConfig.PIPE_HEIGHT + GameConfig.PIPE_OPENING_SPACE, 
+                                  GameConfig.PIPE_WIDTH, GameConfig.PIPE_HEIGHT, false);
         pipes.add(bottomPipe);
     }
 
@@ -130,102 +82,164 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     }
 
     public void draw(Graphics g) {
-        //Drawing the background
-        g.drawImage(backgroundImg, 0, 0, boardWidth, boardHeight, null);
+        Graphics2D g2d = (Graphics2D) g;
         
-        //Drawing the Bird
-        g.drawImage(bird.img, bird.x, bird.y, bird.width, bird.height, null);
+        // Draw background
+        g2d.drawImage(backgroundImg, 0, 0, GameConfig.BOARD_WIDTH, GameConfig.BOARD_HEIGHT, null);
+        
+        // Draw bird with rotation
+        bird.draw(g2d);
     
-        //Drawing the Pipes
+        // Draw pipes
         for (int i = 0; i < pipes.size(); i++) {
             Pipe pipe = pipes.get(i);
-            g.drawImage(pipe.img, pipe.x, pipe.y, pipe.width, pipe.height, null);
-
-            //Display Score
-            g.setColor(Color.white);
-            g.setFont(new Font("Arial", Font.PLAIN, 32));
-            //For displaying the game over sign and the final score
-            if (gameOver) {
-                g.drawString("Game Over :" + String.valueOf((int) score), 10, 35);
-                g.drawString("\nPress Space to Restart", 10, 70);
-            }
-            else {
-                g.drawString(String.valueOf((int) score), 10, 35);
-            }
+            pipe.draw(g2d);
+        }
+        
+        // Draw UI based on game state
+        switch (gameStateManager.getCurrentState()) {
+            case MENU:
+                UIManager.drawMenu(g2d);
+                break;
+            case PLAYING:
+                UIManager.drawScore(g2d, gameStateManager.getScore(), gameStateManager.getHighScore());
+                break;
+            case GAME_OVER:
+                UIManager.drawGameOver(g2d, gameStateManager.getScore(), gameStateManager.getHighScore());
+                break;
+            case PAUSED:
+                UIManager.drawPauseMenu(g2d);
+                break;
         }
     }
 
     public void move() {
-       //Bird move
-        velocityY += gravity;
-        //To constantly change the velocity
-        bird.y += velocityY;
-        //For the bird to be capped to the screen and not go out of it
-        bird.y = Math.max(bird.y, 0);
-
-        //Pipe move
-        for(int i = 0; i < pipes.size(); i++) {
+        if (gameStateManager.getCurrentState() != GameState.PLAYING) {
+            return;
+        }
+        
+        // Bird physics
+        bird.applyGravity();
+        bird.update();
+        
+        // Keep bird within screen bounds
+        if (bird.getY() < 0) {
+            bird.setY(0);
+        }
+        
+        // Update pipes
+        for(int i = pipes.size() - 1; i >= 0; i--) {
             Pipe pipe = pipes.get(i);
-            pipe.x += velocityX;
-
-            if (!pipe.passed && bird.x > pipe.x + pipe.width) {
-                pipe.passed = true;
-                score += 0.5; //we only add 0.5 because the bird passes 2 pipes so it totals to 1 per pipe pass
+            pipe.update();
+            
+            // Check if bird passed pipe
+            if (pipe.hasPassedBird(bird.getX())) {
+                gameStateManager.addScore(GameConfig.SCORE_PER_PIPE);
             }
-
+            
+            // Check collision
             if (collision(bird, pipe)) {
-                gameOver = true;
+                gameStateManager.gameOver();
+                return;
+            }
+            
+            // Remove off-screen pipes
+            if (pipe.isOffScreen()) {
+                pipes.remove(i);
             }
         }
-
-        if (bird.y > boardHeight) {
-            gameOver = true;
+        
+        // Check if bird hit the ground
+        if (bird.getY() > GameConfig.BOARD_HEIGHT) {
+            gameStateManager.gameOver();
         }
     }
 
     public boolean collision(Bird a, Pipe b) {
-        return a.x < b.x + b.width &&
-               a.x + a.width > b.x &&
-               a.y < b.y + b.height &&
-               a.y + a.height > b.y;
-               
+        return a.getX() < b.getX() + b.getWidth() &&
+               a.getX() + a.getWidth() > b.getX() &&
+               a.getY() < b.getY() + b.getHeight() &&
+               a.getY() + a.getHeight() > b.getY();
     }
 
-    //This is the action that happens 60 times every sec, so move and repaint repeats 60 times/sec
+    // Game loop - runs 60 times per second
     @Override
     public void actionPerformed(ActionEvent e) {
+        handleInput();
         move();
         repaint();
-        if (gameOver) {
+        
+        // Stop only the pipe timer if game is over, keep game loop running for input
+        if (gameStateManager.isGameOver()) {
             placePipesTimer.stop();
-            gameLoop.stop();
         }
-     }
-
-     @Override
-     public void keyPressed(KeyEvent e) {
-        if(e.getKeyCode() == KeyEvent.VK_SPACE) {
-            velocityY = -9;        
-            if (gameOver) {
-                //We are resetting all the conditions as it was initially
-                bird.y = birdY;
-                velocityY = 0;
-                pipes.clear();
-                score = 0;
-                gameOver = false;
-                gameLoop.start();
-                placePipesTimer.start();
+    }
+    
+    private void handleInput() {
+        // Handle space key for flapping and game control
+        if (inputManager.isSpaceJustPressed()) {
+            System.out.println("Space pressed! Current state: " + gameStateManager.getCurrentState());
+            switch (gameStateManager.getCurrentState()) {
+                case MENU:
+                    System.out.println("Starting game...");
+                    startGame();
+                    break;
+                case PLAYING:
+                    bird.flap();
+                    break;
+                case GAME_OVER:
+                    restartGame();
+                    break;
+                case PAUSED:
+                    resumeGame();
+                    break;
             }
         }
-    
-     }
-    
-     @Override
-    public void keyTyped(KeyEvent e) {}
         
-
-    @Override
-    public void keyReleased(KeyEvent e) {}
+        // Handle escape key for pause
+        if (inputManager.isEscapeJustPressed()) {
+            if (gameStateManager.getCurrentState() == GameState.PLAYING) {
+                pauseGame();
+            } else if (gameStateManager.getCurrentState() == GameState.PAUSED) {
+                resumeGame();
+            }
+        }
+        
+        // Reset just-pressed flags after handling input
+        inputManager.resetJustPressed();
+    }
+    
+    private void startGame() {
+        gameStateManager.setCurrentState(GameState.PLAYING);
+        gameLoop.start();
+        placePipesTimer.start();
+    }
+    
+    private void pauseGame() {
+        gameStateManager.setCurrentState(GameState.PAUSED);
+        placePipesTimer.stop();
+    }
+    
+    private void resumeGame() {
+        gameStateManager.setCurrentState(GameState.PLAYING);
+        gameLoop.start();
+        placePipesTimer.start();
+    }
+    
+    private void restartGame() {
+        // Reset bird
+        bird.reset(GameConfig.BIRD_X, GameConfig.BIRD_Y);
+        
+        // Clear pipes
+        pipes.clear();
+        
+        // Reset game state
+        gameStateManager.resetGame();
+        
+        // Start timers
+        gameLoop.start();
+        placePipesTimer.start();
+    }
 
 }
 
